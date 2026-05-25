@@ -17,3 +17,4 @@ yarn-error.log*
 google-services.json
 firebase-config.json
 service-account.json
+vercel.env

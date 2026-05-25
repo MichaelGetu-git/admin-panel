@@ -26,8 +26,18 @@ export function getFirebaseAdminApp() {
 }
 
 function getFirebaseAdminCredential(): Credential {
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+  const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
+  if (serviceAccountBase64) {
+    try {
+      const json = Buffer.from(serviceAccountBase64, 'base64').toString('utf8')
+      const config = JSON.parse(json)
+      return cert(config)
+    } catch (error) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64:', error)
+    }
+  }
 
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
   if (serviceAccountPath) {
     return cert(serviceAccountPath)
   }
