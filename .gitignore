@@ -1,0 +1,19 @@
+.next/
+node_modules/
+out/
+build/
+dist/
+coverage/
+.yarn/install-state.gz
+tsconfig.tsbuildinfo
+.env
+.env.*
+!.env.example
+yarn-error.log*
+*.log
+
+# Firebase sensitive files
+*-adminsdk-*.json
+google-services.json
+firebase-config.json
+service-account.json
