@@ -1,6 +1,7 @@
 'use client'
 
 import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 import { getApps, initializeApp } from 'firebase/app'
 
 const firebaseConfig = {
@@ -12,7 +13,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-export function getFirebaseAuthClient() {
+function getFirebaseApp() {
   const missing = Object.entries(firebaseConfig)
     .filter(([, value]) => !value)
     .map(([key]) => key)
@@ -21,6 +22,13 @@ export function getFirebaseAuthClient() {
     throw new Error(`Missing Firebase public config: ${missing.join(', ')}`)
   }
 
-  const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig)
-  return getAuth(app)
+  return getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig)
+}
+
+export function getFirebaseAuthClient() {
+  return getAuth(getFirebaseApp())
+}
+
+export function getFirebaseFirestoreClient() {
+  return getFirestore(getFirebaseApp())
 }
