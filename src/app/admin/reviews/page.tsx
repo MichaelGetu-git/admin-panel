@@ -11,6 +11,7 @@ import {
   query,
   updateDoc,
   where,
+  getDocs,
 } from 'firebase/firestore'
 import { getFirebaseFirestoreClient } from '@/lib/client/firebase'
 import { Trash2, X } from 'lucide-react'
