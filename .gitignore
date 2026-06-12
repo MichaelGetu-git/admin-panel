@@ -18,3 +18,7 @@ google-services.json
 firebase-config.json
 service-account.json
 vercel.env
+
+# Scratch scripts
+create-admin.mjs
+check-user.mjs
