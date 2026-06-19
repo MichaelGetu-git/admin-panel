@@ -19,7 +19,7 @@ export function getFirebaseAdminApp() {
   const appOptions: AppOptions = {
     credential: getFirebaseAdminCredential(),
     projectId,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   }
 
   return initializeApp(appOptions)

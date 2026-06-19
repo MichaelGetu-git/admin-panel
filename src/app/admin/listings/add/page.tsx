@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { EntityFormPage } from '@/components/admin/entity-form-page'
+import { ListingFormPage } from '@/components/admin/listing-form-page'
 import { getEntityConfig } from '@/generated/admin-panel.config'
 import { canWriteEntity } from '@/lib/admin-permissions'
 import { requireAdminUser } from '@/lib/server/auth'
@@ -12,5 +12,5 @@ export default async function Page() {
     notFound()
   }
 
-  return <EntityFormPage adminRole={adminUser.role} entity={entity} mode="create" />
+  return <ListingFormPage adminRole={adminUser.role} entity={entity} mode="create" />
 }

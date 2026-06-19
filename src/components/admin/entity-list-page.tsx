@@ -10,7 +10,6 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  MessageSquare,
   Pencil,
   Plus,
   RefreshCw,
@@ -353,6 +352,11 @@ export function EntityListPage({ adminRole, entity }: EntityListPageProps) {
 
   function recordActions(recordId: string, record: RecordValue) {
     const encodedRecordId = encodeURIComponent(recordId)
+    // Chats use a custom bubble view at /admin/channels/{id} — skip the generic /view
+    const viewHref =
+      entity.key === 'channels'
+        ? '/admin/' + entity.route + '/' + encodedRecordId
+        : '/admin/' + entity.route + '/' + encodedRecordId + '/view'
 
     return (
       <div className="flex shrink-0 justify-end gap-1">
@@ -364,15 +368,8 @@ export function EntityListPage({ adminRole, entity }: EntityListPageProps) {
             onCompleted={() => void loadRecords()}
           />
         )}
-        {entity.key === 'channels' && (
-          <Button asChild size="icon" variant="ghost" title="Messages">
-            <Link href={'/admin/' + entity.route + '/' + encodedRecordId}>
-              <MessageSquare className="h-4 w-4" />
-            </Link>
-          </Button>
-        )}
         <Button asChild size="icon" variant="ghost" title="View">
-          <Link href={'/admin/' + entity.route + '/' + encodedRecordId + '/view'}>
+          <Link href={viewHref}>
             <Eye className="h-4 w-4" />
           </Link>
         </Button>

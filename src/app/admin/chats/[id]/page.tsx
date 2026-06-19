@@ -173,20 +173,50 @@ export default function Page() {
                 No messages found.
               </div>
             ) : (
-              <div className="space-y-3">
-                {messages.map(message => (
-                  <div key={String(message.id)} className="min-w-0 rounded-md border p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {readSender(message)}
-                      </span>
-                      <span>{formatDate(message.createdAt)}</span>
-                    </div>
-                    <div className="whitespace-pre-wrap break-words text-sm">
-                      {readMessageBody(message)}
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-4">
+                <div className="rounded-md border bg-yellow-500/10 p-3 text-sm text-yellow-600 dark:text-yellow-500 text-center mb-6">
+                  This is a read-only view of the conversation between the participants.
+                </div>
+                <div className="flex flex-col space-y-4">
+                  {messages.map((message) => {
+                    const sender = readSender(message)
+                    // If the database didn't record participants, infer the first one from the first message
+                    const firstSender = participants.length > 0 ? participants[0] : readSender(messages[0] ?? message)
+                    
+                    const isFirstParticipant = 
+                      message.senderID === firstSender || 
+                      message.userID === firstSender || 
+                      sender.includes(firstSender) ||
+                      sender === firstSender
+
+                    // Use alignRight if it's NOT the first participant
+                    const alignRight = !isFirstParticipant
+                    
+                    return (
+                      <div
+                        key={String(message.id)}
+                        className={`flex w-full ${alignRight ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`flex max-w-[80%] flex-col rounded-2xl px-4 py-2 text-sm ${
+                            alignRight
+                              ? 'bg-primary text-primary-foreground rounded-br-sm'
+                              : 'bg-muted rounded-bl-sm'
+                          }`}
+                        >
+                          <div className={`mb-1 flex items-center gap-2 text-[10px] ${alignRight ? 'text-primary-foreground/70 justify-end' : 'text-muted-foreground'}`}>
+                            <span className="font-semibold uppercase tracking-wider">{sender}</span>
+                            <span>•</span>
+                            <span>{formatDate(message.createdAt)}</span>
+                          </div>
+                          <div className="whitespace-pre-wrap wrap-break-word leading-relaxed">
+                            {readMessageBody(message)}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </CardContent>

@@ -10,7 +10,8 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { getFirebaseFirestoreClient } from '@/lib/client/firebase'
-import { Search, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,10 +76,12 @@ function ActionModal({
   user,
   currentUserEmail,
   onClose,
+  router,
 }: {
   user: AdminUser
   currentUserEmail: string
   onClose: () => void
+  router: any
 }) {
   const db = getFirebaseFirestoreClient()
   const isSuperAdmin = currentUserEmail === SUPER_ADMIN_EMAIL
@@ -113,6 +116,8 @@ function ActionModal({
   }
 
   const actions: Action[] = []
+
+  actions.push({ key: 'edit', label: 'Edit Full Profile', onPress: () => { router.push(`/admin/users/${user.id}/update`); onClose() } })
 
   if (user.role !== 'admin') {
     actions.push({ key: 'admin', label: 'Promote to Admin', onPress: () => { void updateRole('admin') } })
@@ -188,6 +193,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modalUser, setModalUser] = useState<AdminUser | null>(null)
+  const router = useRouter()
 
   // Simulate current user email from session — we read from cookie name
   // In production this would come from server props, but for client parity we
@@ -224,7 +230,16 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4 pb-10">
-      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">User Management</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">User Management</h1>
+        <button
+          onClick={() => router.push('/admin/users/add')}
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+        >
+          <Plus className="h-4 w-4" />
+          Create
+        </button>
+      </div>
 
       {/* Search */}
       <div className="relative">
@@ -304,6 +319,7 @@ export default function UsersPage() {
           user={modalUser}
           currentUserEmail={currentUserEmail}
           onClose={() => setModalUser(null)}
+          router={router}
         />
       )}
     </div>

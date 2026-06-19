@@ -3,12 +3,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Loader2, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Settings2, Trash2, UserCircle2 } from 'lucide-react'
 import type { AdminEntityConfig } from '@/generated/admin-panel.config'
 import { canRunEntityWorkflows, canWriteEntity } from '@/lib/admin-permissions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { DatingModerationActions } from '@/components/admin/dating-moderation-actions'
 import { EntityWorkflowActions } from '@/components/admin/entity-workflow-actions'
 import {
@@ -22,16 +22,16 @@ import {
   type FieldEntry,
   type RecordValue,
 } from '@/components/admin/entity-form-fields'
-
-interface EntityFormPageProps {
+interface UserFormPageProps {
   adminRole: string
   entity: AdminEntityConfig
   mode: 'create' | 'view' | 'update'
   recordId?: string
 }
 
-export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityFormPageProps) {
+export function UserFormPage({ adminRole, entity, mode, recordId }: UserFormPageProps) {
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'profile' | 'advanced'>('profile')
   const fieldEntries = useMemo(
     () => Object.entries(entity.fields as Record<string, FieldConfig>),
     [entity.fields],
@@ -110,12 +110,6 @@ export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityForm
 
     try {
       const payload = buildPayload(fieldEntries, values)
-
-      // Automatic derivation for listings matching the mobile app behavior
-      if (entity.key === 'listings' && Array.isArray(payload.photos)) {
-        payload.photo = payload.photos[0] ?? null
-        payload.photoURLs = payload.photos
-      }
 
       const endpoint =
         mode === 'create'
@@ -329,9 +323,49 @@ export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityForm
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Fields</CardTitle>
-        </CardHeader>
+        {/* Tab bar: only show in edit/view mode — Advanced data doesn't exist on a new user */}
+        {mode !== 'create' && (
+          <div className="border-b">
+            <div className="flex gap-1 px-4 pt-4">
+              {([
+                {
+                  id: 'profile' as const,
+                  icon: UserCircle2,
+                  label: 'Profile',
+                  sub: 'Identity & public info',
+                },
+                {
+                  id: 'advanced' as const,
+                  icon: Settings2,
+                  label: 'Advanced',
+                  sub: 'Tokens & system data',
+                },
+              ]).map(({ id, icon: Icon, label, sub }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`group flex items-center gap-3 rounded-t-lg px-4 py-3 text-left transition-all ${
+                    activeTab === id
+                      ? 'bg-background border border-b-0 border-border shadow-sm text-foreground -mb-px'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <Icon
+                    className={`h-4 w-4 shrink-0 transition-colors ${
+                      activeTab === id ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                    }`}
+                  />
+                  <span className="hidden sm:block">
+                    <span className="block text-sm font-medium leading-tight">{label}</span>
+                    <span className="block text-[11px] text-muted-foreground leading-tight">{sub}</span>
+                  </span>
+                  <span className="block sm:hidden text-sm font-medium">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <CardContent>
           {isLoading ? (
             <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
@@ -339,29 +373,76 @@ export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityForm
               Loading record...
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {fieldEntries.map(([key, field]) => (
-                <div key={key} className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor={'field-' + key}>
-                    {field.label}
-                    {field.required && <span className="text-destructive"> *</span>}
-                  </label>
-                  {renderField({
-                    disabled: isReadOnly || isAuditField(key),
-                    field,
-                    id: 'field-' + key,
-                    value: values[key] ?? '',
-                    onChange: value => setFieldValue(key, value),
-                    onUploadFiles: files =>
-                      void uploadFieldFiles(key, field, values[key] ?? '', files),
-                    required: field.required === true,
-                    uploading: uploadingField === key,
-                  })}
-                  <p className="text-xs text-muted-foreground">
-                    {key} · {field.type}
-                  </p>
-                </div>
-              ))}
+            <div className="grid gap-4 lg:grid-cols-2 mt-4">
+              {fieldEntries
+                .filter(([key]) => {
+                  // Hide completely — internal app state the admin should never touch
+                  if (key === 'orderRequestData') return false
+
+                  // Profile tab: only the fields an admin actually fills in when creating/editing a user
+                  const profileFields = [
+                    'firstName', 'lastName', 'username', 'email', 'phone',
+                    'profilePictureURL', 'bio', 'role', 'isActive',
+                  ]
+
+                  // In create mode: only show profile fields — Advanced data doesn't exist yet
+                  if (mode === 'create') {
+                    return profileFields.includes(key)
+                  }
+                  // Advanced tab: tokens, IDs, metrics, app-generated data, timestamps
+                  const advancedFields = [
+                    'userID', 'userId', 'pushToken', 'pushKitToken', 'badgeCount',
+                    'isOnline', 'vendorID', 'inProgressOrderID',
+                    'professionalVendorID', 'professionalCategoryID', 'professionalSkills',
+                    'professionalSpecialty', 'pricePerHr', 'isFeatured', 'carName',
+                    'carNumber', 'carType', 'ratings', 'ratingsCount', 'defaultPaymentKey',
+                    'createdAt', 'updatedAt', 'lastOnlineTimestamp',
+                    // User-generated app data — visible for reference, but admin cannot edit
+                    'location', 'shippingAddress', 'savedPlaces', 'wishlist', 'photos',
+                    'professionalSkills',
+                  ]
+                  if (activeTab === 'profile') {
+                    return profileFields.includes(key)
+                  } else {
+                    return advancedFields.includes(key) || (!profileFields.includes(key) && !advancedFields.includes(key))
+                  }
+                })
+                .map(([key, field]) => {
+                  // These are set by the mobile app user — admins view but cannot edit them
+                  const userGeneratedFields = [
+                    'location', 'shippingAddress', 'savedPlaces', 'wishlist', 'photos',
+                    'professionalSkills',
+                  ]
+                  const isUserGenerated = userGeneratedFields.includes(key)
+                  const isFieldDisabled = isReadOnly || isAuditField(key) || isUserGenerated
+
+                  return (
+                    <div key={key} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium" htmlFor={'field-' + key}>
+                          {field.label}
+                          {field.required && <span className="text-destructive"> *</span>}
+                        </label>
+                        {isUserGenerated && (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                            Set by user
+                          </span>
+                        )}
+                      </div>
+                      {renderField({
+                        disabled: isFieldDisabled,
+                        field,
+                        id: 'field-' + key,
+                        value: values[key] ?? '',
+                        onChange: value => setFieldValue(key, value),
+                        onUploadFiles: files =>
+                          void uploadFieldFiles(key, field, values[key] ?? '', files),
+                        required: field.required === true,
+                        uploading: uploadingField === key,
+                      })}
+                    </div>
+                  )
+                })}
             </div>
           )}
         </CardContent>
