@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Braces, Loader2, Upload, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Braces, ChevronLeft, ChevronRight, Loader2, Upload, X } from 'lucide-react'
 import { adminPanelConfig, type AdminEntityConfig } from '@/generated/admin-panel.config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -93,17 +93,9 @@ export function renderField({
   }
 
   if (field.type === 'richText' || isJsonField(field)) {
-    if (field.type === 'photos') {
+      if (field.type === 'photos') {
       return (
         <div className="space-y-2">
-          <Textarea
-            disabled={disabled}
-            id={id}
-            onChange={event => onChange(event.target.value)}
-            required={required}
-            rows={6}
-            value={value}
-          />
           {!disabled && (
             <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
               {uploading ? (
@@ -127,7 +119,7 @@ export function renderField({
               />
             </label>
           )}
-          <MediaPreviewGrid value={value} />
+          <MediaPreviewGrid value={value} onChange={onChange} disabled={disabled} />
         </div>
       )
     }
@@ -236,6 +228,21 @@ function JsonFieldInput({
     }
   }
 
+  // Read-only mode: just show a friendly summary card, no raw textarea
+  if (disabled) {
+    const trimmed = value?.trim()
+    const isEmpty = !trimmed || trimmed === '{}' || trimmed === '[]' || trimmed === 'null'
+    return (
+      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm" id={id}>
+        {isEmpty ? (
+          <span className="text-xs text-muted-foreground italic">No data</span>
+        ) : (
+          <JsonFieldPreview value={value} />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       <Textarea
@@ -319,9 +326,13 @@ function SingleMediaPreview({ value }: { value: string }) {
 function MediaPreviewGrid({
   urls,
   value,
+  onChange,
+  disabled,
 }: {
   urls?: string[]
   value?: string
+  onChange?: (value: string) => void
+  disabled?: boolean
 }) {
   const mediaUrls = urls ?? parseStringArrayValue(value ?? '')
   const visibleUrls = mediaUrls.filter(Boolean).slice(0, 8)
@@ -332,25 +343,80 @@ function MediaPreviewGrid({
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {visibleUrls.map(url => (
-        <a
+      {visibleUrls.map((url, index) => (
+        <div
           key={url}
           className="group relative block aspect-square overflow-hidden rounded-md border bg-muted"
-          href={url}
-          rel="noreferrer"
-          target="_blank"
         >
-          {isImageUrl(url) ? (
-            <SafeImage
-              className="h-full w-full object-cover transition group-hover:scale-105"
-              url={url}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
-              {truncate(url, 64)}
-            </div>
+          <a
+            className="block h-full w-full"
+            href={url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {isImageUrl(url) ? (
+              <SafeImage
+                className="h-full w-full object-cover transition group-hover:scale-105"
+                url={url}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                {truncate(url, 64)}
+              </div>
+            )}
+          </a>
+
+          {onChange && !disabled && (
+            <>
+              {/* Delete */}
+              <button
+                type="button"
+                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                onClick={(e) => {
+                  e.preventDefault()
+                  const newUrls = [...mediaUrls]
+                  newUrls.splice(index, 1)
+                  onChange(JSON.stringify(newUrls, null, 2))
+                }}
+              >
+                <X className="h-3 w-3" />
+              </button>
+
+              {/* Reorder Arrows */}
+              <div className="absolute bottom-1 left-0 right-0 flex justify-between px-1">
+                {index > 0 ? (
+                  <button
+                    type="button"
+                    className="rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      const newUrls = [...mediaUrls]
+                      ;[newUrls[index - 1], newUrls[index]] = [newUrls[index], newUrls[index - 1]]
+                      onChange(JSON.stringify(newUrls, null, 2))
+                    }}
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </button>
+                ) : <div className="w-5" />}
+
+                {index < mediaUrls.length - 1 ? (
+                  <button
+                    type="button"
+                    className="rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      const newUrls = [...mediaUrls]
+                      ;[newUrls[index], newUrls[index + 1]] = [newUrls[index + 1], newUrls[index]]
+                      onChange(JSON.stringify(newUrls, null, 2))
+                    }}
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                ) : <div className="w-5" />}
+              </div>
+            </>
           )}
-        </a>
+        </div>
       ))}
     </div>
   )
@@ -494,6 +560,19 @@ function ForeignKeySelector({
   } = useReferenceOptions(targetEntity, field, selectedIds)
   const selectedOption = selectedOptions[0]
 
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   if (!targetEntity) {
     return (
       <Input
@@ -507,16 +586,20 @@ function ForeignKeySelector({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative" ref={containerRef}>
       <Input
         disabled={disabled}
         id={id}
-        onChange={event => setSearch(event.target.value)}
+        onFocus={() => setIsOpen(true)}
+        onChange={event => {
+          setSearch(event.target.value)
+          setIsOpen(true)
+        }}
         placeholder={'Search ' + targetEntity.displayName}
         value={disabled ? selectedOption?.label ?? value : search}
       />
-      {value && (
-        <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+      {value && !isOpen && (
+        <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm mt-2">
           <ReferenceOptionLabel option={selectedOption ?? fallbackReferenceOption(value)} />
           {!disabled && (
             <Button
@@ -531,17 +614,20 @@ function ForeignKeySelector({
           )}
         </div>
       )}
-      {!disabled && (
-        <ReferenceOptionsList
-          error={error}
-          isLoading={isLoading}
-          options={options}
-          selectedIds={selectedIds}
-          onSelect={option => {
-            onChange(option.id)
-            setSearch(option.label)
-          }}
-        />
+      {!disabled && isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md">
+          <ReferenceOptionsList
+            error={error}
+            isLoading={isLoading}
+            options={options}
+            selectedIds={selectedIds}
+            onSelect={option => {
+              onChange(option.id)
+              setSearch(option.label)
+              setIsOpen(false)
+            }}
+          />
+        </div>
       )}
     </div>
   )
@@ -566,6 +652,19 @@ function ForeignKeysSelector({
     setSearch,
   } = useReferenceOptions(targetEntity, field, selectedIds)
 
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   if (!targetEntity) {
     return (
       <Textarea
@@ -584,16 +683,20 @@ function ForeignKeysSelector({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative" ref={containerRef}>
       <Input
         disabled={disabled}
         id={id}
-        onChange={event => setSearch(event.target.value)}
+        onFocus={() => setIsOpen(true)}
+        onChange={event => {
+          setSearch(event.target.value)
+          setIsOpen(true)
+        }}
         placeholder={'Search ' + targetEntity.displayName}
         value={disabled ? '' : search}
       />
       {selectedIds.length > 0 && (
-        <div className="flex flex-wrap gap-2 rounded-md border bg-muted/40 p-2">
+        <div className="flex flex-wrap gap-2 rounded-md border bg-muted/40 p-2 mt-2">
           {selectedIds.map(selectedId => {
             const option =
               selectedOptions.find(item => item.id === selectedId) ??
@@ -622,17 +725,20 @@ function ForeignKeysSelector({
           })}
         </div>
       )}
-      {!disabled && (
-        <ReferenceOptionsList
-          error={error}
-          isLoading={isLoading}
-          options={options}
-          selectedIds={selectedIds}
-          onSelect={option => {
-            setSelectedIds([...selectedIds, option.id])
-            setSearch('')
-          }}
-        />
+      {!disabled && isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md">
+          <ReferenceOptionsList
+            error={error}
+            isLoading={isLoading}
+            options={options}
+            selectedIds={selectedIds}
+            onSelect={option => {
+              setSelectedIds([...selectedIds, option.id])
+              setSearch('')
+              setIsOpen(false)
+            }}
+          />
+        </div>
       )}
     </div>
   )

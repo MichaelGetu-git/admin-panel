@@ -3,12 +3,13 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Loader2, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, LayersIcon, LayoutList, Loader2, Save, Trash2 } from 'lucide-react'
 import type { AdminEntityConfig } from '@/generated/admin-panel.config'
 import { canRunEntityWorkflows, canWriteEntity } from '@/lib/admin-permissions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { DatingModerationActions } from '@/components/admin/dating-moderation-actions'
 import { EntityWorkflowActions } from '@/components/admin/entity-workflow-actions'
 import {
@@ -22,16 +23,21 @@ import {
   type FieldEntry,
   type RecordValue,
 } from '@/components/admin/entity-form-fields'
+import {
+  FiltersFieldEditor,
+  LocationFieldGroup,
+} from '@/components/admin/listing-custom-fields'
 
-interface EntityFormPageProps {
+interface ListingFormPageProps {
   adminRole: string
   entity: AdminEntityConfig
   mode: 'create' | 'view' | 'update'
   recordId?: string
 }
 
-export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityFormPageProps) {
+export function ListingFormPage({ adminRole, entity, mode, recordId }: ListingFormPageProps) {
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'basics' | 'details'>('basics')
   const fieldEntries = useMemo(
     () => Object.entries(entity.fields as Record<string, FieldConfig>),
     [entity.fields],
@@ -109,11 +115,22 @@ export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityForm
     setStatusMessage(null)
 
     try {
-      const payload = buildPayload(fieldEntries, values)
-
+      const formValues = { ...values }
+      
       // Automatic derivation for listings matching the mobile app behavior
+      // Pre-fill the derived photo field so buildPayload's required checks pass
+      if (entity.key === 'listings' && formValues.photos) {
+        try {
+          const parsed = JSON.parse(formValues.photos)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            formValues.photo = parsed[0]
+          }
+        } catch {}
+      }
+
+      const payload = buildPayload(fieldEntries, formValues)
+
       if (entity.key === 'listings' && Array.isArray(payload.photos)) {
-        payload.photo = payload.photos[0] ?? null
         payload.photoURLs = payload.photos
       }
 
@@ -329,39 +346,184 @@ export function EntityFormPage({ adminRole, entity, mode, recordId }: EntityForm
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Fields</CardTitle>
-        </CardHeader>
-        <CardContent>
+        {/* Polished icon tab bar */}
+        <div className="border-b">
+          <div className="flex gap-1 px-4 pt-4">
+            {([
+              {
+                id: 'basics' as const,
+                icon: LayoutList,
+                label: 'Basics',
+                sub: 'Title, category & photos',
+              },
+              {
+                id: 'details' as const,
+                icon: LayersIcon,
+                label: 'Details',
+                sub: 'Location, filters & contact',
+              },
+            ]).map(({ id, icon: Icon, label, sub }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`group flex items-center gap-3 rounded-t-lg px-4 py-3 text-left transition-all ${
+                  activeTab === id
+                    ? 'bg-background border border-b-0 border-border shadow-sm text-foreground -mb-px'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Icon
+                  className={`h-4 w-4 shrink-0 transition-colors ${
+                    activeTab === id ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                  }`}
+                />
+                <span className="hidden sm:block">
+                  <span className="block text-sm font-medium leading-tight">
+                    {label}
+                    {id === 'basics' && (
+                      <span className="ml-1 text-[10px] font-normal text-destructive">*</span>
+                    )}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground leading-tight">{sub}</span>
+                </span>
+                <span className="block sm:hidden text-sm font-medium">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <CardContent className="pt-6">
           {isLoading ? (
             <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading record...
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {fieldEntries.map(([key, field]) => (
-                <div key={key} className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor={'field-' + key}>
-                    {field.label}
-                    {field.required && <span className="text-destructive"> *</span>}
-                  </label>
-                  {renderField({
-                    disabled: isReadOnly || isAuditField(key),
-                    field,
-                    id: 'field-' + key,
-                    value: values[key] ?? '',
-                    onChange: value => setFieldValue(key, value),
-                    onUploadFiles: files =>
-                      void uploadFieldFiles(key, field, values[key] ?? '', files),
-                    required: field.required === true,
-                    uploading: uploadingField === key,
-                  })}
-                  <p className="text-xs text-muted-foreground">
-                    {key} · {field.type}
-                  </p>
-                </div>
-              ))}
+            <div className="grid gap-6 md:grid-cols-2">
+              {activeTab === 'basics' && fieldEntries
+                .filter(([key]) => ['title', 'categoryID', 'price', 'description', 'isApproved', 'authorID', 'photos'].includes(key))
+                .map(([key, field]) => {
+                  const isFullWidth = key === 'description' || key === 'photos'
+                  return (
+                    <div key={key} className={`space-y-2 ${isFullWidth ? 'md:col-span-2' : ''}`}>
+                      <label className="text-sm font-semibold" htmlFor={'field-' + key}>
+                        {field.label}
+                        {field.required && <span className="ml-0.5 text-destructive">*</span>}
+                      </label>
+                      {key === 'price' ? (
+                        <div className="flex gap-2">
+                          {['$', '$$', '$$$', '$$$$'].map(p => (
+                            <button
+                              key={p}
+                              type="button"
+                              disabled={isReadOnly}
+                              onClick={() => setFieldValue('price', p)}
+                              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
+                                values.price === p
+                                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                                  : 'bg-background hover:bg-muted hover:border-primary/40'
+                              } disabled:opacity-50`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      ) : renderField({
+                        disabled: isReadOnly || isAuditField(key),
+                        field,
+                        id: 'field-' + key,
+                        value: values[key] ?? '',
+                        onChange: value => setFieldValue(key, value),
+                        onUploadFiles: files =>
+                          void uploadFieldFiles(key, field, values[key] ?? '', files),
+                        required: field.required === true,
+                        uploading: uploadingField === key,
+                      })}
+                    </div>
+                  )
+                })
+              }
+
+              {activeTab === 'details' && (
+                <>
+                  <div className="md:col-span-2 space-y-6">
+                    {/* Visibility Section */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Visibility Settings</h3>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {fieldEntries
+                          .filter(([key]) => ['isFeatured', 'isPromoted'].includes(key))
+                          .map(([key, field]) => (
+                            <div key={key} className="space-y-2">
+                              <label className="text-sm font-semibold" htmlFor={'field-' + key}>
+                                {field.label}
+                              </label>
+                              {renderField({
+                                disabled: isReadOnly || isAuditField(key),
+                                field,
+                                id: 'field-' + key,
+                                value: values[key] ?? '',
+                                onChange: value => setFieldValue(key, value),
+                                required: field.required === true,
+                              })}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Contact & Social */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Contact & Social</h3>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {fieldEntries
+                          .filter(([key]) => ['phone', 'website', 'instagram', 'hours'].includes(key))
+                          .map(([key, field]) => (
+                            <div key={key} className="space-y-2">
+                              <label className="text-sm font-semibold" htmlFor={'field-' + key}>
+                                {field.label}
+                              </label>
+                              {renderField({
+                                disabled: isReadOnly || isAuditField(key),
+                                field,
+                                id: 'field-' + key,
+                                value: values[key] ?? '',
+                                onChange: value => setFieldValue(key, value),
+                                required: field.required === true,
+                              })}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Location & Categorization */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Discovery</h3>
+                      <div className="grid gap-8 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-semibold">Location</label>
+                          <LocationFieldGroup
+                            disabled={isReadOnly}
+                            values={values}
+                            onChange={(key, val) => setFieldValue(key, val)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-semibold">Filters</label>
+                          <FiltersFieldEditor
+                            disabled={isReadOnly}
+                            value={values['filters'] ?? ''}
+                            onChange={val => setFieldValue('filters', val)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </CardContent>

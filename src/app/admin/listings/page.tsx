@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   collection,
@@ -11,7 +12,7 @@ import {
   query,
 } from 'firebase/firestore'
 import { getFirebaseFirestoreClient } from '@/lib/client/firebase'
-import { Search, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,11 +149,20 @@ export default function AdminListingsPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">All Workshops</h1>
-        <p className="mt-1 text-xs italic text-muted-foreground opacity-80">
-          Tap a listing to edit or delete
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">All Workshops</h1>
+          <p className="mt-1 text-xs italic text-muted-foreground opacity-80">
+            Tap a listing to edit or delete
+          </p>
+        </div>
+        <Link
+          href="/admin/listings/add"
+          className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Listing
+        </Link>
       </div>
 
       {/* Search */}
@@ -191,7 +201,7 @@ export default function AdminListingsPage() {
               className="group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left transition-shadow hover:shadow-md disabled:opacity-50"
             >
               {/* Photo */}
-              <div className="relative aspect-[4/3] w-full bg-muted">
+              <div className="relative aspect-4/3 w-full bg-muted">
                 {listing.photo ? (
                   <img
                     src={listing.photo}
